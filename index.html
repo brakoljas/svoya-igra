@@ -287,6 +287,59 @@ input,textarea,select{font-family:inherit}
   font-weight:700;z-index:60;transition:.25s}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
+/* ---------- Fit everything on one screen ---------- */
+html,body{height:100%}
+body{height:100vh;height:100dvh;overflow:hidden}
+.wrap{
+  height:100vh;height:100dvh;display:flex;flex-direction:column;
+  padding:clamp(8px,1.6vh,22px) clamp(12px,2vw,30px);
+}
+.topbar{margin-bottom:clamp(6px,1.3vh,16px);flex:0 0 auto}
+.brand b{font-size:clamp(22px,4.6vh,52px)}
+.board{
+  flex:1 1 auto;min-height:0;height:auto;
+  grid-template-rows:auto repeat(5,1fr);
+}
+.cat-head{min-height:0;padding:clamp(5px,1.1vh,14px) 6px;font-size:clamp(11px,2.1vh,20px);display:flex;align-items:center;justify-content:center}
+.cell{aspect-ratio:auto;min-height:0;height:auto}
+.cell .val{font-size:clamp(20px,5vh,54px)}
+.cell .played-mark{font-size:clamp(26px,6vh,60px)}
+.scoreboard{
+  margin-top:clamp(6px,1.3vh,16px);flex:0 0 auto;
+  flex-wrap:nowrap;overflow-x:auto;align-items:stretch;
+}
+.team{flex:1 1 0;min-width:118px;padding:clamp(6px,1.1vh,14px) 12px}
+.team-name{font-size:clamp(13px,1.9vh,20px)}
+.team-score{font-size:clamp(20px,4.4vh,48px);margin-top:2px}
+.team-add{min-height:0;padding:0 18px}
+
+/* ---------- Row-based board: category labels + controls ---------- */
+.board-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:clamp(6px,1.1vh,14px);flex:0 0 auto}
+.bc-group{display:flex;align-items:center;gap:8px;background:#0c1442;border:1px solid var(--line);border-radius:12px;padding:6px 10px}
+.bc-group>span{color:var(--ink-dim);font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.bc-group>b{color:var(--gold);font-size:18px;min-width:20px;text-align:center}
+.bc-group button{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#172153;color:#fff;font-size:18px;font-weight:900;line-height:1;display:grid;place-items:center;transition:border-color .15s}
+.bc-group button:hover:not(:disabled){border-color:var(--cyan)}
+.bc-group button:disabled{opacity:.35;cursor:not-allowed}
+.board{grid-auto-rows:1fr}
+.cat-cell{
+  position:relative;display:flex;align-items:center;gap:6px;border-radius:14px;
+  border:1px solid rgba(150,180,255,.14);border-left:4px solid var(--gold-deep);
+  background:linear-gradient(180deg,#202c7e,#141d57);
+  padding:clamp(4px,1vh,12px) clamp(8px,1vw,14px);min-height:0;overflow:hidden;
+}
+.cat-name{
+  flex:1;min-width:0;background:transparent;border:none;color:#fff;font-weight:800;
+  text-transform:uppercase;letter-spacing:.03em;font-size:clamp(11px,2vh,19px);padding:2px 0;
+}
+.cat-name:focus{outline:none}
+.cat-remove{
+  flex:0 0 auto;width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,59,92,.4);
+  background:rgba(7,11,28,.4);color:var(--red);font-size:15px;line-height:1;opacity:0;
+  display:grid;place-items:center;transition:opacity .15s}
+.cat-cell:hover .cat-remove{opacity:1}
+.cat-remove:hover{background:rgba(255,59,92,.18)}
+
 @media (max-width:640px){
   .opts4{grid-template-columns:1fr}
   .q-opts{grid-template-columns:1fr}
@@ -304,6 +357,10 @@ input,textarea,select{font-family:inherit}
       <button class="btn ghost" id="btn-data">⤓ Данные</button>
       <button class="btn danger" id="btn-reset">↺ Сбросить игру</button>
     </div>
+  </div>
+  <div class="board-controls" id="board-controls">
+    <div class="bc-group"><span>Категории</span><button id="cat-minus" title="Убрать последнюю">−</button><b id="cat-count">5</b><button id="cat-plus" title="Добавить категорию">+</button></div>
+    <div class="bc-group"><span>Вопросы</span><button id="col-minus" title="Убрать последний столбец">−</button><b id="col-count">5</b><button id="col-plus" title="Добавить столбец">+</button></div>
   </div>
   <div class="board" id="board"></div>
   <div class="scoreboard" id="scoreboard"></div>
@@ -366,7 +423,7 @@ input,textarea,select{font-family:inherit}
         <label class="check-line"><input type="checkbox" id="ed-hidetext"> Скрывать текст вопроса до старта музыки</label>
       </div>
     </div>
-    <div class="field"><label>Заполнение поля 5×5 — кликните для перехода</label>
+    <div class="field"><label>Заполнение поля — кликните, чтобы перейти к ячейке</label>
       <div class="mini-head" id="mini-head"></div>
       <div class="mini" id="mini-grid"></div>
       <div class="hint">✓ зелёный — заполнено · красный — пусто · золотая рамка — текущая ячейка. Изменения сохраняются автоматически.</div>
@@ -462,54 +519,82 @@ input,textarea,select{font-family:inherit}
 <script>
 "use strict";
 const LS_KEY = "svoya_igra_v1";
-const VALUES = [100,200,300,400,500];
 const LETTERS = ["А","Б","В","Г"];
 const C = 2 * Math.PI * 118;
+const MIN_CATS = 3, MAX_CATS = 8, MIN_COLS = 4, MAX_COLS = 8, COL_STEP = 100;
+const colValue = c => (c + 1) * COL_STEP;
 
-/* ---------- State ---------- */
-function defaultState(){
+/* ---------- State (categories are rows, questions are columns) ---------- */
+function blankCell(){
+  return {text:"",options:["","","",""],answer:"",image:"",youtube:"",audio:"",music:false,mole:false,moleTheme:"",hideText:false,played:false};
+}
+function mkCat(name, cols){ return {name, cells: Array.from({length:cols}, blankCell)}; }
+function normCell(q){
+  q = q || {};
+  const opts = Array.isArray(q.options) ? q.options.slice(0,4) : [];
+  while(opts.length < 4) opts.push("");
   return {
-    categories: ["Категория 1","Категория 2","Категория 3","Категория 4","Категория 5"],
-    questions: {}, // key `cat-val` -> {text, options:[4], answer, image, youtube, played}
-    teams: [
-      {name:"Команда 1", score:0},
-      {name:"Команда 2", score:0},
-      {name:"Команда 3", score:0},
-    ]
+    text:q.text||"", options:opts, answer:q.answer||"", image:q.image||"", youtube:q.youtube||"",
+    audio:q.audio||"", music:!!q.music, mole:!!q.mole, moleTheme:q.moleTheme||"", hideText:!!q.hideText, played:!!q.played
   };
 }
-let state = load();
-
+function defaultState(){
+  const cols = 5;
+  return {
+    cols,
+    categories: [mkCat("Категория 1",cols),mkCat("Категория 2",cols),mkCat("Категория 3",cols),mkCat("Категория 4",cols),mkCat("Категория 5",cols)],
+    teams: [{name:"Команда 1",score:0},{name:"Команда 2",score:0},{name:"Команда 3",score:0}]
+  };
+}
+/* convert old format {categories:[strings], questions:{"cat-val":{}}} -> new */
+function migrate(s){
+  if(s && Array.isArray(s.categories) && typeof s.categories[0] === "string" && s.questions){
+    const OLDV = [100,200,300,400,500];
+    const categories = s.categories.map((name,ci)=>({
+      name: name || ("Категория "+(ci+1)),
+      cells: OLDV.map(v => normCell(s.questions[ci+"-"+v]))
+    }));
+    return {cols:5, categories, teams: Array.isArray(s.teams)?s.teams:defaultState().teams};
+  }
+  return s;
+}
+function normalize(){
+  if(!state || !Array.isArray(state.categories)){ state = defaultState(); return; }
+  state.cols = Math.max(MIN_COLS, Math.min(MAX_COLS, (state.cols|0) || MIN_COLS));
+  while(state.categories.length < MIN_CATS) state.categories.push(mkCat("Категория "+(state.categories.length+1), state.cols));
+  if(state.categories.length > MAX_CATS) state.categories.length = MAX_CATS;
+  state.categories.forEach((cat,i)=>{
+    if(typeof cat.name !== "string") cat.name = "Категория "+(i+1);
+    cat.cells = Array.isArray(cat.cells) ? cat.cells.map(normCell) : [];
+    while(cat.cells.length < state.cols) cat.cells.push(blankCell());
+    if(cat.cells.length > state.cols) cat.cells.length = state.cols;
+  });
+  if(!Array.isArray(state.teams) || state.teams.length < 3) state.teams = defaultState().teams;
+}
 function load(){
   try{
     const raw = localStorage.getItem(LS_KEY);
     if(!raw) return defaultState();
-    const s = JSON.parse(raw);
-    if(!s.categories || !s.questions || !s.teams) return defaultState();
-    return s;
+    return migrate(JSON.parse(raw));
   }catch(e){ return defaultState(); }
 }
+let state = load();
+normalize();
+
 function save(){
   try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }
-  catch(e){ toast("Не удалось сохранить — возможно, превышен объём (большие изображения)."); }
+  catch(e){ toast("Не удалось сохранить — возможно, превышен объём (большие файлы)."); }
 }
 
 /* ---------- Helpers ---------- */
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-const key = (c,v) => c + "-" + v;
-function getQ(c,v){ return state.questions[key(c,v)]; }
-function ensureQ(c,v){
-  const k = key(c,v);
-  if(!state.questions[k]) state.questions[k] = {text:"",options:["","","",""],answer:"",image:"",youtube:"",audio:"",music:false,mole:false,moleTheme:"",hideText:false,played:false};
-  return state.questions[k];
-}
+const R = () => state.categories.length;
+const Q = () => state.cols;
+function getCell(r,c){ const cat = state.categories[r]; return cat ? cat.cells[c] : undefined; }
 function isFilled(q){ return !!(q && (String(q.text).trim() || String(q.answer).trim() || q.image || q.youtube || q.audio)); }
-function playedCount(){
-  let n=0;
-  for(let c=0;c<5;c++) for(const v of VALUES){ const q=getQ(c,v); if(q&&q.played) n++; }
-  return n;
-}
+function playedCount(){ let n=0; state.categories.forEach(cat=>cat.cells.forEach(c=>{ if(c.played) n++; })); return n; }
+function totalCells(){ return R()*Q(); }
 function ytId(url){
   if(!url) return "";
   url = String(url).trim();
@@ -526,24 +611,39 @@ function toast(msg){
 
 /* ---------- Board render ---------- */
 function renderBoard(){
+  const cols = Q();
+  const board = $("board");
+  board.style.gridTemplateColumns = `clamp(110px,15vw,230px) repeat(${cols},1fr)`;
+  board.style.gridTemplateRows = `repeat(${R()},1fr)`;
   let html = "";
-  state.categories.forEach((c,ci)=>{
-    html += `<input class="cat-head" data-cat="${ci}" value="${esc(c)}" aria-label="Название категории">`;
-  });
-  for(const v of VALUES){
-    for(let c=0;c<5;c++){
-      const q = getQ(c,v);
+  state.categories.forEach((cat,ri)=>{
+    const canRemove = R() > MIN_CATS;
+    html += `<div class="cat-cell">
+      <input class="cat-name" data-cat="${ri}" value="${esc(cat.name)}" aria-label="Название категории">
+      ${canRemove?`<button class="cat-remove" data-remove-cat="${ri}" title="Убрать категорию">×</button>`:""}
+    </div>`;
+    for(let ci=0; ci<cols; ci++){
+      const q = cat.cells[ci];
       const played = q && q.played;
       const filled = isFilled(q);
-      html += `<div class="cell ${played?"played":""} ${filled?"":"empty"}" data-cat="${c}" data-val="${v}">
-        <span class="val">${v}</span>
+      html += `<div class="cell ${played?"played":""} ${filled?"":"empty"}" data-cat="${ri}" data-col="${ci}">
+        <span class="val">${colValue(ci)}</span>
         <button class="edit-icon" data-edit title="Редактировать">✏️</button>
         ${played?'<span class="played-mark">✓</span>':''}
       </div>`;
     }
-  }
-  $("board").innerHTML = html;
+  });
+  board.innerHTML = html;
+  renderControls();
   renderScoreboard();
+}
+function renderControls(){
+  $("cat-count").textContent = R();
+  $("col-count").textContent = Q();
+  $("cat-minus").disabled = R() <= MIN_CATS;
+  $("cat-plus").disabled  = R() >= MAX_CATS;
+  $("col-minus").disabled = Q() <= MIN_COLS;
+  $("col-plus").disabled  = Q() >= MAX_COLS;
 }
 function renderScoreboard(){
   let html = state.teams.map((t,i)=>`
@@ -556,23 +656,59 @@ function renderScoreboard(){
   $("scoreboard").innerHTML = html;
 }
 
-/* board interactions (delegation) */
+/* board interactions */
 $("board").addEventListener("click", e=>{
-  const head = e.target.closest(".cat-head"); if(head) return;
+  if(e.target.closest(".cat-cell")){
+    const rm = e.target.closest("[data-remove-cat]");
+    if(rm) removeCategory(+rm.dataset.removeCat);
+    return;
+  }
   const cell = e.target.closest(".cell"); if(!cell) return;
-  const c = +cell.dataset.cat, v = +cell.dataset.val;
-  if(e.target.closest("[data-edit]")){ e.stopPropagation(); openEditor(c,v); return; }
-  openQuestion(c,v);
+  const r = +cell.dataset.cat, c = +cell.dataset.col;
+  if(e.target.closest("[data-edit]")){ e.stopPropagation(); openEditor(r,c); return; }
+  openQuestion(r,c);
 });
 $("board").addEventListener("contextmenu", e=>{
   const cell = e.target.closest(".cell"); if(!cell) return;
   e.preventDefault();
-  openEditor(+cell.dataset.cat, +cell.dataset.val);
+  openEditor(+cell.dataset.cat, +cell.dataset.col);
 });
 $("board").addEventListener("input", e=>{
-  const h = e.target.closest(".cat-head"); if(!h) return;
-  state.categories[+h.dataset.cat] = h.value; save();
+  const n = e.target.closest(".cat-name"); if(!n) return;
+  state.categories[+n.dataset.cat].name = n.value; save();
 });
+
+/* add / remove categories and question columns */
+function addCategory(){
+  if(R() >= MAX_CATS) return;
+  state.categories.push(mkCat("Категория "+(R()+1), Q()));
+  save(); renderBoard();
+}
+function removeCategory(ri){
+  if(R() <= MIN_CATS){ toast("Минимум "+MIN_CATS+" категории"); return; }
+  const cat = state.categories[ri];
+  if(cat && cat.cells.some(isFilled) && !confirm(`Удалить категорию «${cat.name}» со всеми её вопросами?`)) return;
+  state.categories.splice(ri,1);
+  save(); renderBoard();
+}
+function addColumn(){
+  if(Q() >= MAX_COLS) return;
+  state.cols++;
+  state.categories.forEach(cat=>cat.cells.push(blankCell()));
+  save(); renderBoard();
+}
+function removeColumn(){
+  if(Q() <= MIN_COLS){ toast("Минимум "+MIN_COLS+" вопроса"); return; }
+  const last = Q()-1;
+  if(state.categories.some(cat=>isFilled(cat.cells[last])) && !confirm(`Удалить последний столбец (стоимость ${colValue(last)})?`)) return;
+  state.cols--;
+  state.categories.forEach(cat=>cat.cells.length = state.cols);
+  save(); renderBoard();
+}
+$("cat-plus").addEventListener("click", addCategory);
+$("cat-minus").addEventListener("click", ()=>removeCategory(R()-1));
+$("col-plus").addEventListener("click", addColumn);
+$("col-minus").addEventListener("click", removeColumn);
 
 /* scoreboard interactions */
 $("scoreboard").addEventListener("input", e=>{
@@ -589,16 +725,16 @@ $("scoreboard").addEventListener("click", e=>{
 });
 
 /* ---------- Editor ---------- */
-let editorPos = {cat:0, val:100};
+let editorPos = {r:0, c:0};
 let answerVisible = false;
+const curCell = () => getCell(editorPos.r, editorPos.c);
 
 function buildSelects(){
-  $("ed-cat").innerHTML = state.categories.map((c,i)=>`<option value="${i}">${esc(c)||("Категория "+(i+1))}</option>`).join("");
-  $("ed-val").innerHTML = VALUES.map(v=>`<option value="${v}">${v}</option>`).join("");
+  $("ed-cat").innerHTML = state.categories.map((cat,i)=>`<option value="${i}">${esc(cat.name)||("Категория "+(i+1))}</option>`).join("");
+  $("ed-val").innerHTML = Array.from({length:Q()},(_,c)=>`<option value="${c}">${colValue(c)}</option>`).join("");
 }
-function openEditor(c,v){
-  editorPos = {cat:c, val:v};
-  ensureQ(c,v);
+function openEditor(r,c){
+  editorPos = {r,c};
   answerVisible = false;
   buildSelects();
   syncEditor();
@@ -606,15 +742,14 @@ function openEditor(c,v){
   $("ed-text").focus();
 }
 function syncEditor(){
-  const q = ensureQ(editorPos.cat, editorPos.val);
-  $("ed-cat").value = editorPos.cat;
-  $("ed-val").value = editorPos.val;
+  const q = curCell();
+  $("ed-cat").value = editorPos.r;
+  $("ed-val").value = editorPos.c;
   $("ed-text").value = q.text || "";
   for(let i=0;i<4;i++) $("ed-o"+i).value = (q.options&&q.options[i])||"";
   $("ed-ans").value = q.answer || "";
   $("ed-img").value = q.image && q.image.startsWith("data:") ? "" : (q.image||"");
   $("ed-yt").value = q.youtube || "";
-  // answer cover
   $("ans-cover").style.display = answerVisible ? "none" : "flex";
   $("ed-music").checked = !!q.music;
   $("ed-mole").checked = !!q.mole;
@@ -626,15 +761,12 @@ function syncEditor(){
   renderMini();
 }
 function renderImgPrev(){
-  const q = getQ(editorPos.cat, editorPos.val);
-  const p = $("ed-img-prev");
+  const q = curCell(); const p = $("ed-img-prev");
   if(q && q.image){ p.innerHTML = `<img src="${esc(q.image)}" alt="">`; p.classList.add("show"); }
   else { p.innerHTML=""; p.classList.remove("show"); }
 }
 function renderYtPrev(){
-  const q = getQ(editorPos.cat, editorPos.val);
-  const id = q ? ytId(q.youtube) : "";
-  const p = $("ed-yt-prev");
+  const q = curCell(); const id = q ? ytId(q.youtube) : ""; const p = $("ed-yt-prev");
   if(id){ p.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`; p.classList.add("show"); }
   else { p.innerHTML=""; p.classList.remove("show"); }
 }
@@ -646,40 +778,41 @@ function updateTypeUI(){
   $("ed-mole-fields").classList.toggle("show", k);
 }
 function renderAudioPrev(){
-  const q = getQ(editorPos.cat, editorPos.val);
-  const p = $("ed-audio-prev");
+  const q = curCell(); const p = $("ed-audio-prev");
   if(q && q.audio){ p.innerHTML = `<audio controls src="${esc(q.audio)}"></audio>`; p.classList.add("show"); }
   else { p.innerHTML=""; p.classList.remove("show"); }
 }
 function renderMini(){
-  $("mini-head").innerHTML = state.categories.map(c=>`<span>${esc(c)}</span>`).join("");
+  const cols = Q();
+  $("mini-head").style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  $("mini-grid").style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  $("mini-head").innerHTML = Array.from({length:cols},(_,c)=>`<span>${colValue(c)}</span>`).join("");
   let html = "";
-  for(const v of VALUES){
-    for(let c=0;c<5;c++){
-      const q = getQ(c,v); const filled = isFilled(q);
-      const cur = (c===editorPos.cat && v===editorPos.val);
-      html += `<div class="mc ${filled?"filled":""} ${cur?"cur":""}" data-cat="${c}" data-val="${v}" title="${v}">${filled?"✓":"·"}</div>`;
+  state.categories.forEach((cat,ri)=>{
+    for(let ci=0; ci<cols; ci++){
+      const q = cat.cells[ci]; const filled = isFilled(q);
+      const cur = (ri===editorPos.r && ci===editorPos.c);
+      html += `<div class="mc ${filled?"filled":""} ${cur?"cur":""}" data-cat="${ri}" data-col="${ci}" title="${esc(cat.name)} · ${colValue(ci)}">${filled?"✓":"·"}</div>`;
     }
-  }
+  });
   $("mini-grid").innerHTML = html;
 }
 $("mini-grid").addEventListener("click", e=>{
   const mc = e.target.closest(".mc"); if(!mc) return;
-  editorPos = {cat:+mc.dataset.cat, val:+mc.dataset.val};
-  ensureQ(editorPos.cat, editorPos.val);
+  editorPos = {r:+mc.dataset.cat, c:+mc.dataset.col};
   answerVisible = false;
   syncEditor();
 });
 
 /* live edit -> state */
 function pull(){
-  const q = ensureQ(editorPos.cat, editorPos.val);
+  const q = curCell();
   q.text = $("ed-text").value;
   for(let i=0;i<4;i++) q.options[i] = $("ed-o"+i).value;
   q.answer = $("ed-ans").value;
   const urlImg = $("ed-img").value.trim();
-  if(urlImg) q.image = urlImg;          // typed URL overrides
-  else if(q.image && !q.image.startsWith("data:")) q.image = ""; // cleared url field
+  if(urlImg) q.image = urlImg;
+  else if(q.image && !q.image.startsWith("data:")) q.image = "";
   q.youtube = $("ed-yt").value;
   q.music = $("ed-music").checked;
   q.mole = $("ed-mole").checked;
@@ -696,30 +829,28 @@ function pull(){
 $("ed-img").addEventListener("input", ()=>{ pull(); renderImgPrev(); renderBoard(); renderMini(); });
 $("ed-yt").addEventListener("input", ()=>{ pull(); renderYtPrev(); renderBoard(); renderMini(); });
 ["ed-music","ed-mole"].forEach(id=>$(id).addEventListener("change", ()=>{ pull(); updateTypeUI(); renderBoard(); renderMini(); }));
-$("ed-moletheme").addEventListener("input", pull);
+$("ed-moletheme").addEventListener("input", ()=>{ pull(); buildSelects(); $("ed-cat").value=editorPos.r; });
 $("ed-hidetext").addEventListener("change", pull);
 $("ed-audio").addEventListener("input", ()=>{ pull(); renderAudioPrev(); renderBoard(); renderMini(); });
 $("ed-audio-file").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = () => { const q = ensureQ(editorPos.cat, editorPos.val); q.audio = r.result; $("ed-audio").value=""; save(); renderAudioPrev(); renderBoard(); renderMini(); };
+  r.onload = () => { const q = curCell(); q.audio = r.result; $("ed-audio").value=""; save(); renderAudioPrev(); renderBoard(); renderMini(); };
   r.readAsDataURL(f); e.target.value="";
 });
 $("ed-audio-clear").addEventListener("click", ()=>{
-  const q = ensureQ(editorPos.cat, editorPos.val); q.audio=""; $("ed-audio").value=""; save(); renderAudioPrev(); renderBoard(); renderMini();
+  const q = curCell(); q.audio=""; $("ed-audio").value=""; save(); renderAudioPrev(); renderBoard(); renderMini();
 });
-
 $("ans-cover").addEventListener("click", ()=>{ answerVisible=true; $("ans-cover").style.display="none"; $("ed-ans").focus(); });
 
-/* category/value move (swap) */
+/* move question to another cell (swap) */
 function onPosChange(){
-  const nc = +$("ed-cat").value, nv = +$("ed-val").value;
-  if(nc===editorPos.cat && nv===editorPos.val) return;
-  const fromK = key(editorPos.cat, editorPos.val), toK = key(nc, nv);
-  const a = state.questions[fromK], b = state.questions[toK];
-  state.questions[toK] = a;
-  if(b) state.questions[fromK] = b; else delete state.questions[fromK];
-  editorPos = {cat:nc, val:nv};
+  const nr = +$("ed-cat").value, nc = +$("ed-val").value;
+  if(nr===editorPos.r && nc===editorPos.c) return;
+  const A = state.categories[editorPos.r].cells[editorPos.c];
+  state.categories[editorPos.r].cells[editorPos.c] = state.categories[nr].cells[nc];
+  state.categories[nr].cells[nc] = A;
+  editorPos = {r:nr, c:nc};
   save(); syncEditor(); renderBoard();
 }
 $("ed-cat").addEventListener("change", onPosChange);
@@ -729,35 +860,28 @@ $("ed-val").addEventListener("change", onPosChange);
 $("ed-img-file").addEventListener("change", e=>{
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
-  r.onload = () => {
-    const q = ensureQ(editorPos.cat, editorPos.val);
-    q.image = r.result; $("ed-img").value=""; save();
-    renderImgPrev(); renderBoard(); renderMini();
-  };
-  r.readAsDataURL(f);
-  e.target.value="";
+  r.onload = () => { const q = curCell(); q.image = r.result; $("ed-img").value=""; save(); renderImgPrev(); renderBoard(); renderMini(); };
+  r.readAsDataURL(f); e.target.value="";
 });
 $("ed-img-clear").addEventListener("click", ()=>{
-  const q = ensureQ(editorPos.cat, editorPos.val);
-  q.image=""; $("ed-img").value=""; save(); renderImgPrev(); renderBoard(); renderMini();
+  const q = curCell(); q.image=""; $("ed-img").value=""; save(); renderImgPrev(); renderBoard(); renderMini();
 });
 $("ed-clear").addEventListener("click", ()=>{
-  delete state.questions[key(editorPos.cat, editorPos.val)];
-  ensureQ(editorPos.cat, editorPos.val);
+  state.categories[editorPos.r].cells[editorPos.c] = blankCell();
   answerVisible=false; save(); syncEditor(); renderBoard();
   toast("Ячейка очищена");
 });
 
 /* ---------- Question screen ---------- */
-let curPos = {cat:0, val:100};
+let curPos = {r:0, c:0};
 let assignedTeam = null, musicPending = false;
 let timerRAF = null, timerRunning = false, timerStart = 0;
 
-function openQuestion(c,v){
-  curPos = {cat:c, val:v};
+function openQuestion(r,c){
+  curPos = {r,c};
   assignedTeam = null; musicPending = false;
   openOverlay("question");
-  const q = getQ(c,v);
+  const q = getCell(r,c);
   if(q && q.mole){
     $("q-stage-main").style.display = "none";
     $("q-stage-mole").style.display = "block";
@@ -776,14 +900,14 @@ $("mole-teams").addEventListener("click", e=>{
   startQuestionStage();
 });
 function startQuestionStage(){
-  const q = getQ(curPos.cat, curPos.val);
+  const q = getCell(curPos.r, curPos.c);
   $("q-stage-main").style.display = "block";
 
   let catLabel;
   if(q && q.mole) catLabel = q.moleTheme ? q.moleTheme : "Кот в мешке";
-  else catLabel = state.categories[curPos.cat] || ("Категория "+(curPos.cat+1));
+  else catLabel = (state.categories[curPos.r] && state.categories[curPos.r].name) || ("Категория "+(curPos.r+1));
   $("q-cat").textContent = catLabel;
-  $("q-val").textContent = curPos.val;
+  $("q-val").textContent = colValue(curPos.c);
 
   const isMusic = !!(q && q.music && q.audio);
   const hideText = isMusic && !!q.hideText;
@@ -843,7 +967,7 @@ function stopTimer(){ timerRunning=false; cancelAnimationFrame(timerRAF); }
 $("btn-show").addEventListener("click", showAnswer);
 function showAnswer(){
   stopTimer();
-  const q = ensureQ(curPos.cat, curPos.val);
+  const q = getCell(curPos.r, curPos.c);
   q.played = true; save(); renderBoard();
 
   $("timer-wrap").style.display = "none";
@@ -862,7 +986,6 @@ function showAnswer(){
   }
 
   $("answer-text").textContent = q.answer ? q.answer : "—";
-  // media
   let media = "";
   if(q.image) media += `<img src="${esc(q.image)}" alt="">`;
   const id = ytId(q.youtube);
@@ -870,12 +993,11 @@ function showAnswer(){
   $("answer-media").innerHTML = media;
 
   renderScoring();
-  const r = $("answer-reveal");
-  r.classList.add("show");
+  $("answer-reveal").classList.add("show");
 }
 function renderScoring(){
-  const v = curPos.val;
-  const q = getQ(curPos.cat, curPos.val);
+  const v = colValue(curPos.c);
+  const q = getCell(curPos.r, curPos.c);
   let rows = state.teams.map((t,i)=>({t,i}));
   if(q && q.mole && assignedTeam!=null) rows = rows.filter(x=>x.i===assignedTeam);
   $("scoring").innerHTML = rows.map(({t,i})=>`
@@ -889,8 +1011,8 @@ function renderScoring(){
 $("scoring").addEventListener("click", e=>{
   const p = e.target.closest("[data-plus]"), m = e.target.closest("[data-minus]");
   let i=-1, d=0;
-  if(p){ i=+p.dataset.plus; d=curPos.val; }
-  else if(m){ i=+m.dataset.minus; d=-curPos.val; }
+  if(p){ i=+p.dataset.plus; d=colValue(curPos.c); }
+  else if(m){ i=+m.dataset.minus; d=-colValue(curPos.c); }
   else return;
   state.teams[i].score += d; save();
   const sc = $("scoring").querySelector(`[data-sc="${i}"]`); if(sc) sc.textContent = state.teams[i].score;
@@ -899,19 +1021,19 @@ $("scoring").addEventListener("click", e=>{
 
 /* ---------- Final ---------- */
 function maybeFinal(){
-  if(playedCount() >= 25){ showFinal(); }
+  const total = totalCells();
+  if(total > 0 && playedCount() >= total) showFinal();
 }
 function showFinal(){
-  const sorted = state.teams.map((t,i)=>({...t})).sort((a,b)=>b.score-a.score);
+  const sorted = state.teams.map(t=>({...t})).sort((a,b)=>b.score-a.score);
   const max = sorted.length ? sorted[0].score : 0;
   const winners = sorted.filter(t=>t.score===max);
   $("final-name").textContent = winners.map(w=>w.name).join(" и ");
   $("final-score").textContent = winners.length>1 ? `Ничья · ${max} очков` : `${max} очков`;
   $("final-crown").textContent = winners.length>1 ? "🤝" : "🏆";
 
-  // ranking with competition ranking medals
   const medals = ["🥇","🥈","🥉"];
-  let rank=0, prev=null, shown=0;
+  let rank=0, prev=null;
   $("final-rank").innerHTML = sorted.map((t,idx)=>{
     if(t.score!==prev){ rank = idx; prev=t.score; }
     const medal = rank<3 ? medals[rank] : `${idx+1}.`;
@@ -960,7 +1082,7 @@ $("btn-reset").addEventListener("click", ()=>{
   if(confirm("Сбросить ход игры? Счёт обнулится, все карточки станут несыгранными. Вопросы и команды сохранятся.")) doReset();
 });
 function doReset(){
-  for(const k in state.questions){ if(state.questions[k]) state.questions[k].played=false; }
+  state.categories.forEach(cat=>cat.cells.forEach(c=>c.played=false));
   state.teams.forEach(t=>t.score=0);
   save(); renderBoard();
   toast("Игра сброшена");
@@ -985,9 +1107,9 @@ $("data-download").addEventListener("click", ()=>{
 });
 function applyImport(raw){
   try{
-    const s = JSON.parse(raw);
-    if(!s.categories || !s.questions || !s.teams) throw new Error("bad");
-    state = s; save(); renderBoard(); closeOverlay("data");
+    let s = migrate(JSON.parse(raw));
+    if(!s || !Array.isArray(s.categories) || !Array.isArray(s.teams)) throw new Error("bad");
+    state = s; normalize(); save(); renderBoard(); closeOverlay("data");
     toast("Данные импортированы");
   }catch(_){ toast("Ошибка: некорректный JSON"); }
 }

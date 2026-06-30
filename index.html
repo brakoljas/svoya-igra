@@ -237,6 +237,8 @@ input,textarea,select{font-family:inherit}
 }
 .q-image{display:none;margin:14px auto 0;max-width:760px}
 .q-image img{max-width:100%;max-height:38vh;border-radius:16px;border:1px solid var(--line);display:block;margin:auto}
+.q-video{display:none;margin:14px auto 0;max-width:760px}
+.q-video iframe{width:100%;aspect-ratio:16/9;border:0;border-radius:16px;max-height:46vh}
 .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px;margin:18px auto 0}
 .q-opt{
   background:linear-gradient(180deg,#172153,#101a4d);border:1px solid var(--line);border-radius:14px;
@@ -395,6 +397,10 @@ body{height:100vh;height:100dvh;overflow:hidden}
       </div>
       <div class="preview" id="ed-qimg-prev"></div>
     </div>
+    <div class="field"><label>Видео вопроса — показывается сразу (YouTube)</label>
+      <input class="input" id="ed-qyt" placeholder="Ссылка на YouTube или ID видео">
+      <div class="preview" id="ed-qyt-prev"></div>
+    </div>
     <div class="field"><label>Варианты ответа (необязательно)</label>
       <div class="opts4">
         <div class="opt-wrap"><span class="tag">А</span><input class="input" id="ed-o0" placeholder="Вариант А"></div>
@@ -417,7 +423,7 @@ body{height:100vh;height:100dvh;overflow:hidden}
       </div>
       <div class="preview" id="ed-img-prev"></div>
     </div>
-    <div class="field"><label>YouTube-видео</label>
+    <div class="field"><label>Видео к ответу — показывается после «Показать ответ» (YouTube)</label>
       <input class="input" id="ed-yt" placeholder="Ссылка на YouTube или ID видео">
       <div class="preview" id="ed-yt-prev"></div>
       <div class="hint">Видео встроится автоматически при показе ответа.</div>
@@ -472,6 +478,7 @@ body{height:100vh;height:100dvh;overflow:hidden}
       <div class="q-hidden-hint" id="q-hidden-hint">🎵 Нажмите «Включить фрагмент», чтобы начать</div>
       <div class="q-text" id="q-text"></div>
       <div class="q-image" id="q-image"></div>
+      <div class="q-video" id="q-video"></div>
       <div id="music-box">
         <audio id="q-audio" controls></audio>
         <button class="btn gold btn-clip" id="btn-clip">▶️ Включить фрагмент</button>
@@ -537,7 +544,7 @@ const colValue = c => (c + 1) * COL_STEP;
 
 /* ---------- State (categories are rows, questions are columns) ---------- */
 function blankCell(){
-  return {text:"",options:["","","",""],answer:"",image:"",qimage:"",youtube:"",audio:"",music:false,mole:false,moleTheme:"",hideText:false,played:false};
+  return {text:"",options:["","","",""],answer:"",image:"",qimage:"",youtube:"",qyoutube:"",audio:"",music:false,mole:false,moleTheme:"",hideText:false,played:false};
 }
 function mkCat(name, cols){ return {name, cells: Array.from({length:cols}, blankCell)}; }
 function normCell(q){
@@ -545,7 +552,7 @@ function normCell(q){
   const opts = Array.isArray(q.options) ? q.options.slice(0,4) : [];
   while(opts.length < 4) opts.push("");
   return {
-    text:q.text||"", options:opts, answer:q.answer||"", image:q.image||"", qimage:q.qimage||"", youtube:q.youtube||"",
+    text:q.text||"", options:opts, answer:q.answer||"", image:q.image||"", qimage:q.qimage||"", youtube:q.youtube||"", qyoutube:q.qyoutube||"",
     audio:q.audio||"", music:!!q.music, mole:!!q.mole, moleTheme:q.moleTheme||"", hideText:!!q.hideText, played:!!q.played
   };
 }
@@ -761,6 +768,7 @@ function syncEditor(){
   $("ed-ans").value = q.answer || "";
   $("ed-img").value = q.image && q.image.startsWith("data:") ? "" : (q.image||"");
   $("ed-qimg").value = q.qimage && q.qimage.startsWith("data:") ? "" : (q.qimage||"");
+  $("ed-qyt").value = q.qyoutube || "";
   $("ed-yt").value = q.youtube || "";
   $("ans-cover").style.display = answerVisible ? "none" : "flex";
   $("ed-music").checked = !!q.music;
@@ -769,7 +777,7 @@ function syncEditor(){
   $("ed-audio").value = (q.audio && q.audio.startsWith("data:")) ? "" : (q.audio || "");
   $("ed-hidetext").checked = !!q.hideText;
   updateTypeUI();
-  renderImgPrev(); renderQImgPrev(); renderYtPrev(); renderAudioPrev();
+  renderImgPrev(); renderQImgPrev(); renderYtPrev(); renderQYtPrev(); renderAudioPrev();
   renderMini();
 }
 function renderImgPrev(){
@@ -784,6 +792,11 @@ function renderQImgPrev(){
 }
 function renderYtPrev(){
   const q = curCell(); const id = q ? ytId(q.youtube) : ""; const p = $("ed-yt-prev");
+  if(id){ p.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`; p.classList.add("show"); }
+  else { p.innerHTML=""; p.classList.remove("show"); }
+}
+function renderQYtPrev(){
+  const q = curCell(); const id = q ? ytId(q.qyoutube) : ""; const p = $("ed-qyt-prev");
   if(id){ p.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>`; p.classList.add("show"); }
   else { p.innerHTML=""; p.classList.remove("show"); }
 }
@@ -834,6 +847,7 @@ function pull(){
   if(urlQImg) q.qimage = urlQImg;
   else if(q.qimage && !q.qimage.startsWith("data:")) q.qimage = "";
   q.youtube = $("ed-yt").value;
+  q.qyoutube = $("ed-qyt").value;
   q.music = $("ed-music").checked;
   q.mole = $("ed-mole").checked;
   q.moleTheme = $("ed-moletheme").value;
@@ -849,6 +863,7 @@ function pull(){
 $("ed-img").addEventListener("input", ()=>{ pull(); renderImgPrev(); renderBoard(); renderMini(); });
 $("ed-qimg").addEventListener("input", ()=>{ pull(); renderQImgPrev(); renderBoard(); renderMini(); });
 $("ed-yt").addEventListener("input", ()=>{ pull(); renderYtPrev(); renderBoard(); renderMini(); });
+$("ed-qyt").addEventListener("input", ()=>{ pull(); renderQYtPrev(); renderBoard(); renderMini(); });
 ["ed-music","ed-mole"].forEach(id=>$(id).addEventListener("change", ()=>{ pull(); updateTypeUI(); renderBoard(); renderMini(); }));
 $("ed-moletheme").addEventListener("input", ()=>{ pull(); buildSelects(); $("ed-cat").value=editorPos.r; });
 $("ed-hidetext").addEventListener("change", pull);
@@ -950,6 +965,11 @@ function startQuestionStage(){
   if(q && q.qimage){ qi.innerHTML = `<img src="${esc(q.qimage)}" alt="">`; qi.style.display = hideText ? "none" : "block"; }
   else { qi.innerHTML = ""; qi.style.display = "none"; }
 
+  const qv = $("q-video");
+  const qvid = q ? ytId(q.qyoutube) : "";
+  if(qvid){ qv.innerHTML = `<iframe src="https://www.youtube.com/embed/${qvid}" allowfullscreen></iframe>`; qv.style.display = hideText ? "none" : "block"; }
+  else { qv.innerHTML = ""; qv.style.display = "none"; }
+
   if(isMusic){ $("music-box").style.display = "flex"; $("q-audio").src = q.audio; }
   else { $("music-box").style.display = "none"; $("q-audio").removeAttribute("src"); }
 
@@ -965,7 +985,7 @@ function startQuestionStage(){
   $("btn-show").disabled = false;
   $("timer-wrap").style.display = "flex";
 
-  if(isMusic){ musicPending = true; stopTimer(); $("timer").classList.remove("danger"); setRing(60); }
+  if(isMusic){ musicPending = true; stopTimer(); $("timer").classList.remove("danger"); setRing(60); $("q-audio").play().then(()=>{ if(musicPending){ musicPending=false; $("q-text").style.display="block"; $("q-hidden-hint").style.display="none"; if($("q-image").innerHTML) $("q-image").style.display="block"; if($("q-video").innerHTML) $("q-video").style.display="block"; startTimer(); } }).catch(()=>{}); }
   else { musicPending = false; startTimer(); }
 }
 $("btn-clip").addEventListener("click", ()=>{
@@ -973,6 +993,7 @@ $("btn-clip").addEventListener("click", ()=>{
   $("q-text").style.display = "block";
   $("q-hidden-hint").style.display = "none";
   if($("q-image").innerHTML) $("q-image").style.display = "block";
+  if($("q-video").innerHTML) $("q-video").style.display = "block";
   if(musicPending){ musicPending = false; startTimer(); }
 });
 function startTimer(){
@@ -1027,6 +1048,8 @@ function showAnswer(){
   const id = ytId(q.youtube);
   if(id) media += `<div style="margin-top:12px"><iframe src="https://www.youtube.com/embed/${id}?autoplay=1" allow="autoplay" allowfullscreen></iframe></div>`;
   $("answer-media").innerHTML = media;
+  if(id){ $("q-video").innerHTML = ""; $("q-video").style.display = "none"; }
+  else if($("q-video").innerHTML){ $("q-video").style.display = "block"; }
 
   renderScoring();
   $("answer-reveal").classList.add("show");
@@ -1099,7 +1122,7 @@ $("final-reset").addEventListener("click", ()=>{ doReset(); closeOverlay("final"
 function openOverlay(id){ $(id).classList.add("open"); }
 function closeOverlay(id){
   $(id).classList.remove("open");
-  if(id==="question"){ stopTimer(); const a=$("q-audio"); if(a) a.pause(); $("answer-media").innerHTML=""; renderBoard(); maybeFinal(); }
+  if(id==="question"){ stopTimer(); const a=$("q-audio"); if(a) a.pause(); $("q-video").innerHTML=""; $("answer-media").innerHTML=""; renderBoard(); maybeFinal(); }
 }
 document.querySelectorAll("[data-close]").forEach(b=>{
   b.addEventListener("click", ()=>closeOverlay(b.dataset.close));

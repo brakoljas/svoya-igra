@@ -335,7 +335,10 @@ body{height:100vh;height:100dvh;overflow:hidden}
 .cat-name{
   flex:1;min-width:0;background:transparent;border:none;color:#fff;font-weight:800;
   text-transform:uppercase;letter-spacing:.03em;font-size:clamp(11px,2vh,19px);padding:2px 0;
+  text-align:center;line-height:1.15;overflow-wrap:anywhere;word-break:break-word;
+  max-height:100%;overflow:auto;cursor:text;
 }
+.cat-name:empty::before{content:attr(data-ph);color:var(--ink-dim);font-weight:600}
 .cat-name:focus{outline:none}
 .cat-remove{
   flex:0 0 auto;width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,59,92,.4);
@@ -637,8 +640,7 @@ function renderBoard(){
   state.categories.forEach((cat,ri)=>{
     const canRemove = R() > MIN_CATS;
     html += `<div class="cat-cell">
-      <input class="cat-name" data-cat="${ri}" value="${esc(cat.name)}" aria-label="Название категории">
-      ${canRemove?`<button class="cat-remove" data-remove-cat="${ri}" title="Убрать категорию">×</button>`:""}
+      <div class="cat-name" data-cat="${ri}" contenteditable="true" role="textbox" aria-label="Название категории" data-ph="Категория">${esc(cat.name)}</div>      ${canRemove?`<button class="cat-remove" data-remove-cat="${ri}" title="Убрать категорию">×</button>`:""}
     </div>`;
     for(let ci=0; ci<cols; ci++){
       const q = cat.cells[ci];
@@ -693,7 +695,11 @@ $("board").addEventListener("contextmenu", e=>{
 });
 $("board").addEventListener("input", e=>{
   const n = e.target.closest(".cat-name"); if(!n) return;
-  state.categories[+n.dataset.cat].name = n.value; save();
+  state.categories[+n.dataset.cat].name = n.textContent; save();
+});
+$("board").addEventListener("keydown", e=>{
+  const n = e.target.closest(".cat-name"); if(!n) return;
+  if(e.key==="Enter"){ e.preventDefault(); n.blur(); }
 });
 
 /* add / remove categories and question columns */

@@ -235,6 +235,8 @@ input,textarea,select{font-family:inherit}
 .q-text{
   font-size:clamp(26px,4.3vw,58px);font-weight:800;line-height:1.18;margin:18px auto 10px;max-width:1000px;
 }
+.q-image{display:none;margin:14px auto 0;max-width:760px}
+.q-image img{max-width:100%;max-height:38vh;border-radius:16px;border:1px solid var(--line);display:block;margin:auto}
 .q-opts{display:grid;grid-template-columns:1fr 1fr;gap:14px;max-width:900px;margin:18px auto 0}
 .q-opt{
   background:linear-gradient(180deg,#172153,#101a4d);border:1px solid var(--line);border-radius:14px;
@@ -385,6 +387,14 @@ body{height:100vh;height:100dvh;overflow:hidden}
       <input class="input" id="ed-moletheme" placeholder="Напр.: Кино 90-х">
     </div>
     <div class="field"><label>Текст вопроса</label><textarea class="area" id="ed-text" placeholder="Введите вопрос…"></textarea></div>
+    <div class="field"><label>Изображение вопроса — показывается сразу (URL или файл)</label>
+      <div class="media-tools">
+        <input class="input" id="ed-qimg" placeholder="https://… или загрузите файл">
+        <label class="btn ghost" style="margin:0">📁 Файл<input type="file" id="ed-qimg-file" accept="image/*" hidden></label>
+        <button class="btn ghost" id="ed-qimg-clear">Убрать</button>
+      </div>
+      <div class="preview" id="ed-qimg-prev"></div>
+    </div>
     <div class="field"><label>Варианты ответа (необязательно)</label>
       <div class="opts4">
         <div class="opt-wrap"><span class="tag">А</span><input class="input" id="ed-o0" placeholder="Вариант А"></div>
@@ -399,7 +409,7 @@ body{height:100vh;height:100dvh;overflow:hidden}
         <div class="answer-cover" id="ans-cover">👁 Показать поле ответа</div>
       </div>
     </div>
-    <div class="field"><label>Изображение (URL или файл)</label>
+    <div class="field"><label>Изображение к ответу — показывается после «Показать ответ» (URL или файл)</label>
       <div class="media-tools">
         <input class="input" id="ed-img" placeholder="https://… или загрузите файл">
         <label class="btn ghost" style="margin:0">📁 Файл<input type="file" id="ed-img-file" accept="image/*" hidden></label>
@@ -461,6 +471,7 @@ body{height:100vh;height:100dvh;overflow:hidden}
       </div>
       <div class="q-hidden-hint" id="q-hidden-hint">🎵 Нажмите «Включить фрагмент», чтобы начать</div>
       <div class="q-text" id="q-text"></div>
+      <div class="q-image" id="q-image"></div>
       <div id="music-box">
         <audio id="q-audio" controls></audio>
         <button class="btn gold btn-clip" id="btn-clip">▶️ Включить фрагмент</button>
@@ -526,7 +537,7 @@ const colValue = c => (c + 1) * COL_STEP;
 
 /* ---------- State (categories are rows, questions are columns) ---------- */
 function blankCell(){
-  return {text:"",options:["","","",""],answer:"",image:"",youtube:"",audio:"",music:false,mole:false,moleTheme:"",hideText:false,played:false};
+  return {text:"",options:["","","",""],answer:"",image:"",qimage:"",youtube:"",audio:"",music:false,mole:false,moleTheme:"",hideText:false,played:false};
 }
 function mkCat(name, cols){ return {name, cells: Array.from({length:cols}, blankCell)}; }
 function normCell(q){
@@ -534,7 +545,7 @@ function normCell(q){
   const opts = Array.isArray(q.options) ? q.options.slice(0,4) : [];
   while(opts.length < 4) opts.push("");
   return {
-    text:q.text||"", options:opts, answer:q.answer||"", image:q.image||"", youtube:q.youtube||"",
+    text:q.text||"", options:opts, answer:q.answer||"", image:q.image||"", qimage:q.qimage||"", youtube:q.youtube||"",
     audio:q.audio||"", music:!!q.music, mole:!!q.mole, moleTheme:q.moleTheme||"", hideText:!!q.hideText, played:!!q.played
   };
 }
@@ -749,6 +760,7 @@ function syncEditor(){
   for(let i=0;i<4;i++) $("ed-o"+i).value = (q.options&&q.options[i])||"";
   $("ed-ans").value = q.answer || "";
   $("ed-img").value = q.image && q.image.startsWith("data:") ? "" : (q.image||"");
+  $("ed-qimg").value = q.qimage && q.qimage.startsWith("data:") ? "" : (q.qimage||"");
   $("ed-yt").value = q.youtube || "";
   $("ans-cover").style.display = answerVisible ? "none" : "flex";
   $("ed-music").checked = !!q.music;
@@ -757,12 +769,17 @@ function syncEditor(){
   $("ed-audio").value = (q.audio && q.audio.startsWith("data:")) ? "" : (q.audio || "");
   $("ed-hidetext").checked = !!q.hideText;
   updateTypeUI();
-  renderImgPrev(); renderYtPrev(); renderAudioPrev();
+  renderImgPrev(); renderQImgPrev(); renderYtPrev(); renderAudioPrev();
   renderMini();
 }
 function renderImgPrev(){
   const q = curCell(); const p = $("ed-img-prev");
   if(q && q.image){ p.innerHTML = `<img src="${esc(q.image)}" alt="">`; p.classList.add("show"); }
+  else { p.innerHTML=""; p.classList.remove("show"); }
+}
+function renderQImgPrev(){
+  const q = curCell(); const p = $("ed-qimg-prev");
+  if(q && q.qimage){ p.innerHTML = `<img src="${esc(q.qimage)}" alt="">`; p.classList.add("show"); }
   else { p.innerHTML=""; p.classList.remove("show"); }
 }
 function renderYtPrev(){
@@ -813,6 +830,9 @@ function pull(){
   const urlImg = $("ed-img").value.trim();
   if(urlImg) q.image = urlImg;
   else if(q.image && !q.image.startsWith("data:")) q.image = "";
+  const urlQImg = $("ed-qimg").value.trim();
+  if(urlQImg) q.qimage = urlQImg;
+  else if(q.qimage && !q.qimage.startsWith("data:")) q.qimage = "";
   q.youtube = $("ed-yt").value;
   q.music = $("ed-music").checked;
   q.mole = $("ed-mole").checked;
@@ -827,6 +847,7 @@ function pull(){
   $(id).addEventListener("input", ()=>{ pull(); renderBoard(); renderMini(); });
 });
 $("ed-img").addEventListener("input", ()=>{ pull(); renderImgPrev(); renderBoard(); renderMini(); });
+$("ed-qimg").addEventListener("input", ()=>{ pull(); renderQImgPrev(); renderBoard(); renderMini(); });
 $("ed-yt").addEventListener("input", ()=>{ pull(); renderYtPrev(); renderBoard(); renderMini(); });
 ["ed-music","ed-mole"].forEach(id=>$(id).addEventListener("change", ()=>{ pull(); updateTypeUI(); renderBoard(); renderMini(); }));
 $("ed-moletheme").addEventListener("input", ()=>{ pull(); buildSelects(); $("ed-cat").value=editorPos.r; });
@@ -865,6 +886,15 @@ $("ed-img-file").addEventListener("change", e=>{
 });
 $("ed-img-clear").addEventListener("click", ()=>{
   const q = curCell(); q.image=""; $("ed-img").value=""; save(); renderImgPrev(); renderBoard(); renderMini();
+});
+$("ed-qimg-file").addEventListener("change", e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => { const q = curCell(); q.qimage = r.result; $("ed-qimg").value=""; save(); renderQImgPrev(); renderBoard(); renderMini(); };
+  r.readAsDataURL(f); e.target.value="";
+});
+$("ed-qimg-clear").addEventListener("click", ()=>{
+  const q = curCell(); q.qimage=""; $("ed-qimg").value=""; save(); renderQImgPrev(); renderBoard(); renderMini();
 });
 $("ed-clear").addEventListener("click", ()=>{
   state.categories[editorPos.r].cells[editorPos.c] = blankCell();
@@ -916,6 +946,10 @@ function startQuestionStage(){
   $("q-text").style.display = hideText ? "none" : "block";
   $("q-hidden-hint").style.display = hideText ? "block" : "none";
 
+  const qi = $("q-image");
+  if(q && q.qimage){ qi.innerHTML = `<img src="${esc(q.qimage)}" alt="">`; qi.style.display = hideText ? "none" : "block"; }
+  else { qi.innerHTML = ""; qi.style.display = "none"; }
+
   if(isMusic){ $("music-box").style.display = "flex"; $("q-audio").src = q.audio; }
   else { $("music-box").style.display = "none"; $("q-audio").removeAttribute("src"); }
 
@@ -938,6 +972,7 @@ $("btn-clip").addEventListener("click", ()=>{
   $("q-audio").play().catch(()=>{});
   $("q-text").style.display = "block";
   $("q-hidden-hint").style.display = "none";
+  if($("q-image").innerHTML) $("q-image").style.display = "block";
   if(musicPending){ musicPending = false; startTimer(); }
 });
 function startTimer(){
@@ -976,6 +1011,7 @@ function showAnswer(){
   $("music-box").style.display = "none";
   $("q-hidden-hint").style.display = "none";
   $("q-text").style.display = "block";
+  if($("q-image").innerHTML) $("q-image").style.display = "block";
   $("q-audio").pause();
 
   if(q.mole && assignedTeam!=null){
